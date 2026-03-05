@@ -3,4 +3,4 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-${SCRIPT_DIR}/docker/run.sh
+${SCRIPT_DIR}/docker/pipeline.sh
