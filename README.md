@@ -4,22 +4,33 @@ This repository contains a data pipeline for downloading and preparing the versi
 
 ## Overview
 
-This project automates three major stages:
+This project automates five major stages:
 
-1. **Jasenovac victim list data extraction** — Downloads individual victim pages from the USHMM, extracts structured fields (name and surname, father's name, birth year, place of birth, etc.) from HTML, and exports to JSON and XLSX.
-2. **1964 Yugoslav victim list data extraction** — Downloads the multi-part PDF publication from the Museum of Genocide, extracts two-column text via PyMuPDF, and parses victim records by Yugoslav republic component (Slo, Hrv, BiH, Crg, Mak, Srb, Kos, Voj).
-3. **Record matching** — Groups records from both sources by normalized name, surname, father's name, birth year, and place of birth, then matches them accounting for name variant normalization (Croatian/German diacritics, transliteration alternates), birth year tolerance, and alternative birth year references in source notes. Results are exported to an `.xlsx` file with optional cross-links and grouping by death place.
+1. **Jasenovac victim list data extraction** (`jms/`) — Downloads individual victim pages from the USHMM, extracts structured fields (name and surname, father's name, birth year, place of birth, etc.) from HTML, and exports to JSON and XLSX.
+2. **1964 Yugoslav victim list data extraction** (`1964/`) — Downloads the multi-part PDF publication from the Museum of Genocide, extracts two-column text via PyMuPDF, and parses victim records by Yugoslav republic component (Slo, Hrv, BiH, Crg, Mak, Srb, Kos, Voj).
+3. **Record matching** (`scripts/`) — Matches records from both sources using multiple methods:
+   - **Deterministic exact matching** with name normalization (diacritic removal, phonetic simplification, 156 domain-specific synonym pairs), configurable birth year tolerance, and name-surname swap handling.
+   - **Levenshtein distance-based approximate matching** with configurable distance thresholds and birth year tolerances, enabling progressive relaxation from strict to fuzzy criteria.
+   - **Fellegi–Sunter probabilistic record linkage** with EM-estimated parameters, composite likelihood-ratio scoring, and configurable classification thresholds.
+   Results are exported to an `.xlsx` file with optional cross-links and grouping by death place.
+4. **Biographical lexicon cross-referencing** (`hbl/`, `zbl/`) — Downloads and parses entries from the Croatian Biographical Lexicon (HBL) and the Jewish Biographical Lexicon (ZBL), published by the Miroslav Krleža Institute of Lexicography, and matches them against the Jasenovac victim list to identify well-documented individuals with contradictory records.
+5. **Auschwitz death certificate cross-referencing** (`auschwitz/`) — Matches records from Auschwitz death certificates (Sterbebücher) against both MG64 and the Jasenovac victim list to identify individuals appearing in both sources.
 
 ## Requirements
 
 - Python 3
 - System packages: `wget` (for downloading source data)
-- Python packages (see `requirements.txt`):
+- Core Python packages (see `requirements.txt`):
   - `pymupdf==1.19.2` — PDF text extraction
   - `xlsxwriter==3.0.1` — Excel file generation
   - `tqdm==4.62.3` — Progress bars
+- Additional packages used by cross-referencing and plotting scripts:
+  - `openpyxl` — Reading Excel files (Auschwitz matching)
+  - `matplotlib` — Plotting
+  - `opencv-python` (`cv2`) — Image cropping for plots
+  - `numpy` — Numerical operations
 
-Install dependencies:
+Install core dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -33,10 +44,12 @@ pip install -r requirements.txt
 ./pipeline.sh
 ```
 
-This executes the three stages in order:
+This executes the five stages in order:
 1. `jms/scripts/pipeline.sh` — download and extract the Jasenovac victim list data
 2. `1964/scripts/pipeline.sh` — download and extract MG version of the 1964 Yugoslav victim list
-3. `scripts/pipeline.sh` — match records and produce `matched.xlsx`
+3. `scripts/pipeline.sh` — deterministic matching and produce `matched.xlsx`
+4. `zbl/pipeline.sh` — download and match Jewish Biographical Lexicon entries
+5. `hbl/pipeline.sh` — download and match Croatian Biographical Lexicon entries
 
 ### Run with Docker
 
@@ -60,11 +73,40 @@ Run the script that builds the image and runs the pipeline in a container:
 ./1964/scripts/pipeline.sh
 ```
 
-**Matching only** (requires pre-existing extracted data):
+**Deterministic matching only** (requires pre-existing extracted data):
 
 ```bash
 ./scripts/pipeline.sh
 ```
+
+**Full matching sweep** including Fellegi–Sunter probabilistic linkage with multiple parameter configurations:
+
+```bash
+./scripts/pipeline2.sh
+```
+
+**Biographical lexicon cross-referencing:**
+
+```bash
+./hbl/pipeline.sh
+./zbl/pipeline.sh
+```
+
+**Auschwitz death certificate cross-referencing:**
+
+```bash
+./auschwitz/pipeline.sh
+```
+
+### Plotting Scripts
+
+The `scripts/` directory contains several plotting scripts used to generate figures for the accompanying paper:
+
+- `plot_number_of_matches.py` — Number of matches across different parameter settings
+- `plot_alternative_birth_years_histogram.py` — Distribution of alternative birth years in source notes
+- `plot_matched_alternative_birth_years_histogram.py` — Birth year differences in matched records
+- `plot_fs_scores.py` — Fellegi–Sunter score distribution histogram
+- `count_jasenovac_and_sg_cases.py` — Count and chart MG64 records by Jasenovac-related death place
 
 ## Output
 
